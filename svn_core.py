@@ -127,11 +127,25 @@ class Core():
         for root, dirs, files in os.walk(path):
             """用正则表达式判断路径名是否匹配"""
             # 如果根目录不在忽略列表，则添加到版本库，并继续搜索其余文件
-            if self.ignore_check(root) == False:
-                self.add_to_untrack_list(root)
-                for f in files:
-                    if self.ignore_check(f) == False:
-                        self.add_to_untrack_list(f)
+            #root = os.path.abspath(root)
+            #if self.ignore_check(root) == False:
+            #    self.add_to_untrack_list(root)
+            #    for f in files:
+            #        name = os.path.abspath( os.path.join(root, f) )
+            #        if self.ignore_check(name) == False:
+            #            self.add_to_untrack_list(name)
+
+            for name in dirs:
+                name = os.path.abspath( os.path.join(root, name) )
+                if self.ignore_check(name) == False:
+                    self.add_to_untrack_list(name)
+
+            for name in files:
+                name = os.path.abspath( os.path.join(root, name) )
+                if self.ignore_check(name):
+                    self.add_to_untrack_list(name)
+
+
 
     def find_untrack_file(self):
         ''' 将没有添加到版本库的文件或目录添加到 untrack list'''

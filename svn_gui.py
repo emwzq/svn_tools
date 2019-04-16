@@ -67,7 +67,7 @@ class   GUI(Core):
         for i in self.untrack_dirs:
             self.status_text.insert(INSERT,i + '\n')
         for i in self.untrack_files:
-            self.status_text.insert(INSERT, '\t' + i + '\n')
+            self.status_text.insert(INSERT, '  ' + i + '\n')
 
     def btn_add(self):
         self.status_text.delete(0.0,END)
@@ -98,7 +98,7 @@ class   GUI(Core):
         self.status_text.delete(0.0, END)
         ignore_list = []
         for root, dirs, files in os.walk(".", topdown=True):
-            pattern = re.compile(r'(\.(svn|git))|(\b__pycache__)')
+            pattern = re.compile(r'(\.(svn|git)\b)|(\b__pycache__)')
             #pattern = re.compile(r'\.(svn|git)')
             for name in dirs:
                 name = os.path.abspath( os.path.join(root, name) )
