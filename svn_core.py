@@ -1,120 +1,27 @@
-
+#! /usr/bin/python3
 import  subprocess
-import  os
 import  re
 import  sys
 sys.path.append(re.sub('\W\w+(\.\w+)?$','',sys.argv[0]))
+from ignore_check import *
+import tkinter.messagebox as messagebox
+from tkinter import *
+from tkinter.scrolledtext import ScrolledText
+import shutil
 
-# Creat set, for store ignore files and dirs
-ignore_files = set()
-ignore_dirs = set()
-
-dirs_filter = [
-    r'^work$',
-    r'\/\..*',
-
-    # quartus
-    r'\Wdb\W',
-    r'\bincremental_db\b',
-    # Ncverilog
-    r'\bINCA_libs\b',
-    r'.*\.shm\b',
-    # VCS
-    r'\bcsrc\b',
-    r'\bsimv.daidir\b',
-    # Verdi
-    r'\bverdiLog\b',
-
-    # Python3
-    r'__pycache__',
-]
-
-files_filter = [
-    r'\bmovdelsim\.ini$',
-    r'\..*swp',
-
-    # quartus
-    r'.*\.qws$', r'.*\.*\.rpt$', r'.*\.*\.smsg$', r'.*\.jdi$',
-    r'.*\.cdf$', r'.*\.done$', r'.*\.map$', r'.*\.summary$',
-    # Ncverilog
-    r'.*\.key$', r'.*\.ver$',
-    r'.*\.log$', r'.*\.fsdb$',
-    r'\bsimv$',
-    # Keil
-    r'.*\.bak$', r'.*\.axf$', r'.*\.lnp$', r'.*\.plg$', r'.*\.sct$',
-    r'.*\.uvopt$', r'.*\.Bak$', r'.*\.dep$', r'.*.crf$', r'.*\.d$',
-    r'.*\.o$', r'.*\.lst$', r'.*\.uvgui.*$', r'.*\.plg$',
-]
-
-#####################################################################################
+from mygui import *
 
 class Core():
     def __init__(self):
         # Creat set, for store ignore files and dirs
-        self.ignore_files = set()
-        self.ignore_dirs = set()
+        self.ignore = Ignore()
 
         self.untrack_dirs = []
         self.untrack_files = []
         self.del_lists = []
         self.adding_list = []
+        self.untrack_list = []
 
-        self.set_default_ignore()
-        self.read_ignore_file('.gitignore')
-        self.read_ignore_file('.svnignore')
-
-    def set_default_ignore(self):
-        for i in dirs_filter:
-            self.ignore_dirs.add(re.compile(i))
-        for i in files_filter:
-            self.ignore_files.add(re.compile(i))
-
-    # Import ignore list from .gitignore or .svnignore
-    def read_ignore_file(self,file_name):
-        if os.path.exists(file_name):
-            fin = open(file_name, 'rt')
-            for line in fin:
-                line = line.strip()
-                line = re.sub('\*', '.*', line)
-                if (line == '') or (line[0] == '#'):
-                    continue
-                if line[-1] == '/':
-                    self.ignore_dirs.add( re.compile(line[:-1]) )
-                else:
-                    self.ignore_files.add(re.compile(line))
-
-    def ignore_check(self,f):
-        """传入文件或目录，判断是否在忽略列表，如果是忽略，返回True"""
-        if os.path.isdir(f):
-            for d_filter in self.ignore_dirs:
-                m = d_filter.search(f)
-                if m:
-                    print ('\tignore dir')
-                    return True
-        elif os.path.isfile(f):
-            basename = os.path.basename(f)
-            dirname = os.path.dirname(f)
-            for f_filter in self.ignore_files:
-                m = f_filter.search(basename)
-                if m:
-                    print ('\tignore file> ' + basename)
-                    return True
-
-            for d_filter in self.ignore_dirs:
-                m = d_filter.search(dirname)
-                if m:
-                    print ('\tignore dir> ' + dirname)
-                    return True
-        else:
-            ignore_list = self.ignore_dirs | self.ignore_files
-            for d_filter in ignore_list:
-                m = d_filter.search(f)
-                if m:
-                    print ('\tignore unknow>' + f)
-                    return True
-            
-        print ('\t Pass')
-        return False
 
     def add_to_untrack_list(self,f):
         if os.path.isfile(f):
@@ -126,53 +33,36 @@ class Core():
         """文件搜索，输入搜索路径根目录，路径名称过滤，文件名称过滤"""
         for root, dirs, files in os.walk(path):
             """用正则表达式判断路径名是否匹配"""
-            # 如果根目录不在忽略列表，则添加到版本库，并继续搜索其余文件
-            #root = os.path.abspath(root)
-            #if self.ignore_check(root) == False:
-            #    self.add_to_untrack_list(root)
-            #    for f in files:
-            #        name = os.path.abspath( os.path.join(root, f) )
-            #        if self.ignore_check(name) == False:
-            #            self.add_to_untrack_list(name)
-
             for name in dirs:
                 name = os.path.abspath( os.path.join(root, name) )
-                if self.ignore_check(name) == False:
-                    self.add_to_untrack_list(name)
-
+                self.untrack_dirs.append(name)
             for name in files:
-                name = os.path.abspath( os.path.join(root, name) )
-                if self.ignore_check(name):
-                    self.add_to_untrack_list(name)
-
-
+                name = os.path.abspath(os.path.join(root, name))
+                self.untrack_files.append(os.path.abspath(name))
 
     def find_untrack_file(self):
         ''' 将没有添加到版本库的文件或目录添加到 untrack list'''
         ret = subprocess.getoutput('svn st')
-        print (ret)
+        #print (ret)
         if ret == '':
             return
         svn_msg_list = re.split('\n', ret)
         for line in svn_msg_list:
             print ("--->",line)
+            words = re.split('\s\s+',line)
             # 如果是问好，表示该项没有添加到版本库
-
-            if line[0] == '?':
-                flag, f = re.split('\s\s+', line)
-                # 提取出文件名
-                # 如果是文件，判断是否是忽略文件，
-                # 如果不是忽略文件，直接添加到版本库
+            if words[0] == '?':
+                f = os.path.abspath(words[1])
                 if os.path.isfile(f):
-                    if self.ignore_check(f) == False:
-                        self.add_to_untrack_list(f)
+                    self.untrack_files.append(f)
                 else:
-                    # 是目录，并且该目录不在忽略列表，则搜索目录下的文件
-                    if self.ignore_check(f) == False:
+                    if self.ignore.file_is_ignore(f) == False:
+                        self.untrack_dirs.append(f)
                         self.scan_dirs(f)
+
             # 如果是!，表示该项已经被删除
             if line[0] == '!':
-                flag, f = re.split('\s\s+', line)
+                f = words[1]
                 self.del_lists.append(f)
 
     def scan(self):
@@ -181,26 +71,35 @@ class Core():
         self.del_lists = []
         self.find_untrack_file()
 
-        #for d in self.untrack_dirs:
-        #    print ('untrack dir >    ',d)
-        #for f in self.untrack_files:
-        #    print ('untrack file >    ',f)
-        #for f in self.del_lists:
-        #    print ('Del list >    ',f)
+        for d in self.untrack_dirs:
+            print ('untrack dir >    ',d)
+        for f in self.untrack_files:
+            print ('untrack file >    ',f)
+        for f in self.del_lists:
+            print ('Del list >    ',f)
+
+        print ('----------------------------------')
+        self.untrack_dirs = self.ignore.find_not_ignore(self.untrack_dirs)
+        self.untrack_files = self.ignore.find_not_ignore(self.untrack_files)
+
+        for d in self.untrack_dirs:
+            print ('untrack dir >    ',d)
+        for f in self.untrack_files:
+            print ('untrack file >    ',f)
+        for f in self.del_lists:
+            print ('Del list >    ',f)
+
 
     def add(self):
         s = ''
         for d in self.untrack_dirs:
-            #print ('Adding dir >    ',d)
             ret = subprocess.getoutput('svn add ' + d + ' -N' + ' --force')
             s += ret
         for f in self.untrack_files:
-            #print ('Adding file >    ',f)
             ret = subprocess.getoutput('svn add ' + f + ' --force')
             self.adding_list.append(f)
             s += ret
         for f in self.del_lists:
-            print ('Del file >    ',f)
             ret = subprocess.getoutput('svn del ' + f + ' --force')
             s += ret
         return s
@@ -214,6 +113,88 @@ class Core():
         ret = subprocess.getoutput('svn up')
         return (ret)
 
+    def info(self):
+        self.status_text.delete(0.0, END)
+        ret = subprocess.getoutput('svn info')
+        self.status_text.insert(INSERT,ret)
+
+    def del_ignore(self):
+        self.status_text.delete(0.0, END)
+        ignore_list = []
+        for root, dirs, files in os.walk(".", topdown=True):
+            pattern = re.compile(r'(\.(svn|git)\b)|(\b__pycache__)')
+            for name in dirs:
+                name = os.path.abspath( os.path.join(root, name) )
+                m = pattern.search(name)
+                if m:
+                    pass
+                else:
+                    ignore_list.append(os.path.join(root, name))
+
+            for name in files:
+                name = os.path.abspath( os.path.join(root, name) )
+                if m:
+                    pass
+                else:
+                    ignore_list.append(os.path.join(root, name))
+        ignore_list = self.ignore.find_ignore(ignore_list)
+
+        if len(ignore_list)==0:
+            self.status_text.insert(INSERT, 'no ignore file\n')
+            return
+
+        for i in ignore_list:
+            self.status_text.insert(INSERT, 'delete? :'+ i + '\n')
+        self.status_text.update()
+
+        del_all = messagebox.askyesno("delete all?", "Delete all ignore files??")
+        if del_all:
+            for i in ignore_list:
+                self.status_text.insert(INSERT, 'delect> ' + i + '\n')
+                if os.path.isdir(i):
+                    shutil.rmtree(i)  # 递归删除文件夹
+                else:
+                    try:
+                        os.remove(i)
+                    except:
+                        pass
+        else:
+            del_sig = messagebox.askyesno("delete one?", "Delete one by one??")
+            if del_sig:
+
+                for i in ignore_list:
+                    del_one = messagebox.askyesno("delete?", "Delete " + i + '?')
+                    if del_one:
+                        if os.path.isdir(i):
+                            shutil.rmtree(i)  # 递归删除文件夹
+                        else:
+                            try:
+                                os.remove(i)
+                            except:
+                                pass
+
+    def del_untrack(self):
+        self.status_text.delete(0.0, END)
+        untrack_list = []
+        ret = subprocess.getoutput('svn st')
+        if ret != '':
+            svn_msg_list = re.split('\n', ret)
+            for i in svn_msg_list:
+                if i[0] == '?':
+                    ir = re.split(' \s+',i)[1]
+                    self.status_text.insert(INSERT, 'utrack> ' + ir + '\n')
+                    untrack_list.append(ir)
+        self.status_text.update()
+        if len(untrack_list)==0:
+            self.status_text.insert(INSERT, 'no utrack file\n')
+            return
+        dd = messagebox.askyesno("Delete All?", "If Delete all files?")
+        if dd:
+            for i in untrack_list:
+                if os.path.isdir(i):
+                    shutil.rmtree(i)  # 递归删除文件夹
+                else:
+                    os.remove(i)
 
 if __name__=='__main__':
     SVN = Core()
