@@ -30,15 +30,19 @@ class Core():
             self.untrack_dirs.append(f)
 
     def scan_dirs(self,path='.'):
+        c = 0
         """文件搜索，输入搜索路径根目录，路径名称过滤，文件名称过滤"""
         for root, dirs, files in os.walk(path):
             """用正则表达式判断路径名是否匹配"""
             for name in dirs:
                 name = os.path.abspath( os.path.join(root, name) )
                 self.untrack_dirs.append(name)
+                c +=1
             for name in files:
                 name = os.path.abspath(os.path.join(root, name))
                 self.untrack_files.append(os.path.abspath(name))
+                c +=1
+        print ("times = %d"%c)
 
     def find_untrack_file(self):
         ''' 将没有添加到版本库的文件或目录添加到 untrack list'''
